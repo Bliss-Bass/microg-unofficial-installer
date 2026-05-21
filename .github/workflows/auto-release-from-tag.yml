@@ -9,6 +9,12 @@ on:
     tags:
       - "v*"
       - "nightly"
+  workflow_dispatch:
+    inputs:
+      tag-name:
+        description: "Tag to build and publish (e.g. nightly, v1.3.2-rc1, v1.3.2.48)"
+        required: true
+        type: "string"
   workflow_call:
     inputs:
       tag-name:
@@ -73,7 +79,7 @@ jobs:
         id: "release-logic"
         shell: bash
         env:
-          INPUT_TAG_NAME: "${{ github.event_name == 'workflow_dispatch' && inputs.tag-name || '' }}"
+          INPUT_TAG_NAME: "${{ inputs.tag-name || '' }}"
           INPUT_TAG_NAME_VALID: "${{ startsWith(inputs.tag-name, 'v') }}"
         run: |
           # Release logic...
@@ -124,6 +130,19 @@ jobs:
           elif test "${IS_STABLE_RELEASE:?}" = 'true'; then
             if '${{ github.run_attempt == '1' && steps.build.outputs.ZIP_IS_ALPHA == 'false' && steps.build.outputs.ZIP_BUILD_TYPE_SUPPORTED == 'true' }}'; then
               CREATE_RELEASE='true'
+            fi
+          fi
+
+          if test "${CREATE_RELEASE:?}" = 'false'; then
+            printf '%s\n' '::warning::Release was not created. Common causes:'
+            if test "${IS_NIGHTLY_RELEASE:?}" = 'true'; then
+              printf '%s\n' '::warning::  nightly tag requires module.prop version ending in -alpha and a successful OSS build.'
+            elif test "${IS_RC_RELEASE:?}" = 'true'; then
+              printf '%s\n' '::warning::  RC tag requires ZIP_BUILD_TYPE_SUPPORTED=true (build must finish successfully).'
+            elif test "${IS_STABLE_RELEASE:?}" = 'true'; then
+              printf '%s\n' '::warning::  stable v* tag requires module.prop version WITHOUT -alpha suffix.'
+            else
+              printf '%s\n' "::warning::  unrecognized tag type for ${TAG_NAME?}."
             fi
           fi
 
@@ -220,6 +239,8 @@ jobs:
       - name: "Create release"
         uses: softprops/action-gh-release@v3
         if: "${{ steps.release-logic.outputs.CREATE_RELEASE == 'true' }}"
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         with:
           name: "${{ steps.release-logic.outputs.IS_NIGHTLY_RELEASE == 'true' && format('{0} nightly ({1} builds)', steps.build.outputs.ZIP_VERSION, steps.build.outputs.ZIP_ARCH_COUNT) || (steps.release-logic.outputs.IS_RC_RELEASE == 'true' && format('{0} ({1} builds)', steps.release-logic.outputs.TAG_NAME, steps.build.outputs.ZIP_ARCH_COUNT) || steps.release-logic.outputs.TAG_NAME) }}"
           tag_name: "${{ steps.release-logic.outputs.TAG_NAME }}"
@@ -230,8 +251,9 @@ jobs:
           draft: false
           prerelease: "${{ steps.release-logic.outputs.IS_NIGHTLY_RELEASE == 'true' || steps.release-logic.outputs.IS_RC_RELEASE == 'true' }}"
           make_latest: "${{ steps.release-logic.outputs.IS_STABLE_RELEASE == 'true' }}"
-          overwrite_files: false
+          overwrite_files: true
           files: |
-            ${{ steps.build.outputs.ZIP_FOLDER }}/*.zip*
-            ${{ steps.info.outputs.ZIP_ATTESTATION_FILE }}
+            ${{ steps.build.outputs.ZIP_FOLDER }}/*.zip
+            ${{ steps.build.outputs.ZIP_FOLDER }}/*.zip.sha256
+            ${{ steps.build.outputs.ZIP_FOLDER }}/*.zip.md5
           fail_on_unmatched_files: true
