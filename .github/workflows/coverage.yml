@@ -74,7 +74,7 @@ jobs:
         run: |
           # Executing code coverage (universal OSS build; matches release APK sources).
           export BUILD_TYPE=oss
-          bundle exec bashcov '${{ github.workspace }}/build.sh' --no-default-build-type --no-pause --arch universal
+          bundle exec bashcov '${{ github.workspace }}/build.sh' -- --no-default-build-type --no-pause --arch universal
       - name: "Testing (with coverage)"
         shell: bash
         timeout-minutes: 10
@@ -87,7 +87,7 @@ jobs:
           _zip="$(find '${{ steps.build.outputs.ZIP_FOLDER }}' -maxdepth 1 -name '*-universal-*-signed.zip' -type f | head -n 1)"
           test -n "${_zip}" || _zip="$(find '${{ steps.build.outputs.ZIP_FOLDER }}' -maxdepth 1 -name '*-signed.zip' -type f | head -n 1)"
           test -n "${_zip}" || { echo '::error::No signed zip found for install test'; exit 1; }
-          bundle exec bashcov '${{ github.workspace }}/recovery-simulator/recovery.sh' "${_zip}"
+          bundle exec bashcov '${{ github.workspace }}/recovery-simulator/recovery.sh' -- "${_zip}"
           printf '\n'
           echo '==============='
           echo 'RECOVERY OUTPUT'
