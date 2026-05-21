@@ -72,7 +72,11 @@ GitHub Actions builds **all** of the architectures above for each release:
   updates the ``nightly`` tag and publishes a prerelease with every arch zip.
 - **Version** — when a ``v*`` tag is pushed or when the "Tag and release"
   workflow creates one (see ``.github/workflows/auto-release-from-tag.yml``):
-  publishes a release with every arch zip.
+  publishes a release with every arch zip. Stable tags require
+  ``module.prop`` without a ``-alpha`` suffix.
+- **Release candidate** — tags containing ``-rc`` (e.g. ``v1.3.2-rc1``)
+  publish a **prerelease** with all arch zips even if ``module.prop`` is still
+  ``-alpha``.
 - **Manual nightly tag** — pushing or moving the ``nightly`` tag also runs the
   release workflow and refreshes the prerelease assets.
 

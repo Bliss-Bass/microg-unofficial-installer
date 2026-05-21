@@ -80,6 +80,8 @@ jobs:
           CREATE_RELEASE='false'
           IS_NIGHTLY_RELEASE='false'
           IS_VERSION_RELEASE='false'
+          IS_RC_RELEASE='false'
+          IS_STABLE_RELEASE='false'
 
           if test -n "${INPUT_TAG_NAME?}"; then
             if test "${INPUT_TAG_NAME_VALID:?}" = 'true'; then
@@ -103,11 +105,23 @@ jobs:
             exit 4
           fi
 
+          case "${TAG_NAME:?}" in
+            *-rc* | *-RC*) IS_RC_RELEASE='true' ;;
+            *) ;;
+          esac
+          if test "${IS_VERSION_RELEASE:?}" = 'true' && test "${IS_RC_RELEASE:?}" = 'false'; then
+            IS_STABLE_RELEASE='true'
+          fi
+
           if test "${IS_NIGHTLY_RELEASE:?}" = 'true'; then
             if '${{ github.run_attempt == '1' && steps.build.outputs.ZIP_IS_ALPHA == 'true' && steps.build.outputs.ZIP_BUILD_TYPE_SUPPORTED == 'true' }}'; then
               CREATE_RELEASE='true'
             fi
-          elif test "${IS_VERSION_RELEASE:?}" = 'true'; then
+          elif test "${IS_RC_RELEASE:?}" = 'true'; then
+            if '${{ github.run_attempt == '1' && steps.build.outputs.ZIP_BUILD_TYPE_SUPPORTED == 'true' }}'; then
+              CREATE_RELEASE='true'
+            fi
+          elif test "${IS_STABLE_RELEASE:?}" = 'true'; then
             if '${{ github.run_attempt == '1' && steps.build.outputs.ZIP_IS_ALPHA == 'false' && steps.build.outputs.ZIP_BUILD_TYPE_SUPPORTED == 'true' }}'; then
               CREATE_RELEASE='true'
             fi
@@ -117,12 +131,14 @@ jobs:
           printf 'CREATE_RELEASE=%s\n' "${CREATE_RELEASE:?}" 1>> "${GITHUB_OUTPUT?}"
           printf 'IS_NIGHTLY_RELEASE=%s\n' "${IS_NIGHTLY_RELEASE:?}" 1>> "${GITHUB_OUTPUT?}"
           printf 'IS_VERSION_RELEASE=%s\n' "${IS_VERSION_RELEASE:?}" 1>> "${GITHUB_OUTPUT?}"
-          printf 'Create release? %s (tag: %s)\n' "${CREATE_RELEASE:?}" "${TAG_NAME:?}"
+          printf 'IS_RC_RELEASE=%s\n' "${IS_RC_RELEASE:?}" 1>> "${GITHUB_OUTPUT?}"
+          printf 'IS_STABLE_RELEASE=%s\n' "${IS_STABLE_RELEASE:?}" 1>> "${GITHUB_OUTPUT?}"
+          printf 'Create release? %s (tag: %s, rc: %s, stable: %s)\n' "${CREATE_RELEASE:?}" "${TAG_NAME:?}" "${IS_RC_RELEASE:?}" "${IS_STABLE_RELEASE:?}"
       - name: "Attest build provenance"
         id: "attest"
         uses: actions/attest-build-provenance@v4
         timeout-minutes: 10
-        if: "${{ vars.ATTESTATION == 'true' && github.run_attempt == '1' && steps.build.outputs.ZIP_IS_ALPHA == 'false' && steps.build.outputs.ZIP_BUILD_TYPE_SUPPORTED == 'true' && steps.release-logic.outputs.IS_VERSION_RELEASE == 'true' }}"
+        if: "${{ vars.ATTESTATION == 'true' && github.run_attempt == '1' && steps.build.outputs.ZIP_IS_ALPHA == 'false' && steps.build.outputs.ZIP_BUILD_TYPE_SUPPORTED == 'true' && steps.release-logic.outputs.IS_STABLE_RELEASE == 'true' }}"
         with:
           subject-path: "${{ steps.build.outputs.ZIP_FOLDER }}/*.zip"
           show-summary: false
@@ -150,14 +166,17 @@ jobs:
           fi
           # Preparing temp folder...
           export TMPDIR="${TMPDIR:-${RUNNER_TEMP:-${TMP:-${TEMP:-/tmp}}}}" || exit "${?}"
-          our_tmp_dir="$(mktemp -d -t -- "RELEASE-${{ steps.release-logic.outputs.IS_NIGHTLY_RELEASE == 'true' && 'nightly' || 'release' }}-XXXXXX")" || exit "${?}"
+          release_label='release'
+          if test '${{ steps.release-logic.outputs.IS_NIGHTLY_RELEASE }}' = 'true'; then
+            release_label='nightly'
+          elif test '${{ steps.release-logic.outputs.IS_RC_RELEASE }}' = 'true'; then
+            release_label='rc'
+          fi
+          our_tmp_dir="$(mktemp -d -t -- "RELEASE-${release_label:?}-XXXXXX")" || exit "${?}"
           test -n "${our_tmp_dir?}" || exit "${?}"
           rm -r -f -- "${our_tmp_dir:?}"/* || exit "${?}"
           # Preparing release notes...
-          release_type='release'
-          if test '${{ steps.release-logic.outputs.IS_NIGHTLY_RELEASE }}' = 'true'; then
-            release_type='nightly'
-          fi
+          release_type="${release_label:?}"
           chmod +x .github/scripts/prepare-multi-arch-release-notes.sh
           .github/scripts/prepare-multi-arch-release-notes.sh "${release_type:?}" \
             "${our_tmp_dir:?}/release-notes.md" \
@@ -202,15 +221,15 @@ jobs:
         uses: softprops/action-gh-release@v3
         if: "${{ steps.release-logic.outputs.CREATE_RELEASE == 'true' }}"
         with:
-          name: "${{ steps.release-logic.outputs.IS_NIGHTLY_RELEASE == 'true' && format('{0} nightly ({1} builds)', steps.build.outputs.ZIP_VERSION, steps.build.outputs.ZIP_ARCH_COUNT) || steps.release-logic.outputs.TAG_NAME }}"
+          name: "${{ steps.release-logic.outputs.IS_NIGHTLY_RELEASE == 'true' && format('{0} nightly ({1} builds)', steps.build.outputs.ZIP_VERSION, steps.build.outputs.ZIP_ARCH_COUNT) || (steps.release-logic.outputs.IS_RC_RELEASE == 'true' && format('{0} ({1} builds)', steps.release-logic.outputs.TAG_NAME, steps.build.outputs.ZIP_ARCH_COUNT) || steps.release-logic.outputs.TAG_NAME) }}"
           tag_name: "${{ steps.release-logic.outputs.TAG_NAME }}"
           target_commitish: "${{ github.sha }}"
           body_path: "${{ steps.info.outputs.ZIP_RELEASE_NOTES }}"
-          append_body: "${{ steps.release-logic.outputs.IS_VERSION_RELEASE == 'true' }}"
-          generate_release_notes: "${{ steps.release-logic.outputs.IS_VERSION_RELEASE == 'true' }}"
+          append_body: "${{ steps.release-logic.outputs.IS_STABLE_RELEASE == 'true' || steps.release-logic.outputs.IS_RC_RELEASE == 'true' }}"
+          generate_release_notes: "${{ steps.release-logic.outputs.IS_STABLE_RELEASE == 'true' || steps.release-logic.outputs.IS_RC_RELEASE == 'true' }}"
           draft: false
-          prerelease: "${{ steps.release-logic.outputs.IS_NIGHTLY_RELEASE == 'true' }}"
-          make_latest: "${{ steps.release-logic.outputs.IS_VERSION_RELEASE == 'true' }}"
+          prerelease: "${{ steps.release-logic.outputs.IS_NIGHTLY_RELEASE == 'true' || steps.release-logic.outputs.IS_RC_RELEASE == 'true' }}"
+          make_latest: "${{ steps.release-logic.outputs.IS_STABLE_RELEASE == 'true' }}"
           overwrite_files: false
           files: |
             ${{ steps.build.outputs.ZIP_FOLDER }}/*.zip*

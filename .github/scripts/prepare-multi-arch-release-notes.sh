@@ -19,6 +19,13 @@ REPO_URL="${6:-}"
     printf '%s\n' 'Contributions are greatly appreciated but always optional.**'
     printf '\n'
     printf '%s\n\n' "Latest automatically built ZIPs ($(date -u -- '+%Y/%m/%d' || :))."
+  elif test "${RELEASE_TYPE:?}" = 'rc'; then
+    printf '%s' "**If you'd like to support my work, you can find donation details on "
+    printf '%s\n' "[this page](${REPO_URL:?}/blob/main/docs/DONATE.rst)."
+    printf '%s\n' 'Contributions are greatly appreciated but always optional.**'
+    printf '\n'
+    test -z "${ZIP_VERSION?}" || printf 'Module version in tree: **%s**\n\n' "${ZIP_VERSION:?}"
+    printf '%s\n\n' '**Release candidate** — pre-release build; not a stable release.'
   else
     printf '%s' '**If you want to help me you can donate to me using the `Sponsor` button at the top of '
     printf '%s\n' "[this repository](${REPO_URL:?})."
