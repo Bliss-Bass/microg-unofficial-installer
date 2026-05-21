@@ -77,6 +77,26 @@ GitHub Actions builds **all** of the architectures above for each release:
 - **Release candidate** — tags containing ``-rc`` (e.g. ``v1.3.2-rc1``)
   publish a **prerelease** with all arch zips even if ``module.prop`` is still
   ``-alpha``.
+
+Module version (``module.prop``)
+--------------------------------
+
+For ``--arch`` builds and CI multi-arch releases, ``tools/generate-module-version.sh``
+rewrites ``zip-content/module.prop`` before packaging:
+
+- **Base** — latest **microG Services** (``com.google.android.gms``) version from
+  the `microG F-Droid index <https://microg.org/fdroid/repo/>`_ (same source as
+  ``pull_arch_apks.sh``).
+- **Sub-version** — total git commit count on ``HEAD`` (monotonic; requires a full
+  clone, so release workflows use ``fetch-depth: 0``).
+- **Suffix** — ``-alpha`` for nightly / RC / local ``keep`` when the tree already
+  had ``-alpha``; omitted for stable ``v*`` tags (no ``-rc`` in the tag name).
+
+Example: ``version=v0.3.15.250932.5084-alpha`` with ``versionCode=5084``.
+
+Override the channel with ``MODULE_VERSION_CHANNEL=alpha|stable|keep``. Stable
+GitHub releases need a tag like ``v0.3.15.250932.5084`` (no ``-alpha`` in
+``module.prop``).
 - **Manual nightly tag** — pushing or moving the ``nightly`` tag runs only
   **Auto-release from tag** (not Coverage or Code lint). Use
   ``git push origin HEAD:refs/tags/nightly`` for the tag alone; avoid

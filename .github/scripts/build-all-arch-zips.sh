@@ -11,6 +11,28 @@ ARCH_LIST="${ARCH_LIST:-universal,x86_64,x86,arm64-v8a,armeabi-v7a}"
 
 cd "${REPO_ROOT:?}"
 
+_resolve_version_channel() {
+  if test -n "${MODULE_VERSION_CHANNEL:-}"; then
+    printf '%s' "${MODULE_VERSION_CHANNEL:?}"
+    return 0
+  fi
+  _tag="${GITHUB_REF_NAME:-}"
+  case "${_tag:?}" in
+    nightly) printf 'alpha' ;;
+    v*-rc*) printf 'alpha' ;;
+    v*) printf 'stable' ;;
+    *) printf 'keep' ;;
+  esac
+}
+
+if test -x "${REPO_ROOT:?}/tools/generate-module-version.sh"; then
+  _version_channel="$(_resolve_version_channel)"
+  "${REPO_ROOT:?}/tools/generate-module-version.sh" "${REPO_ROOT:?}" "${_version_channel:?}"
+  export SKIP_MODULE_VERSION_GEN=1
+  unset _version_channel
+fi
+unset -f _resolve_version_channel 2> /dev/null || :
+
 if test -f "${REPO_ROOT:?}/zip-content/module.prop"; then
   MODULE_VER="$(grep -m 1 -e '^version=' -- "${REPO_ROOT:?}/zip-content/module.prop" | cut -d '=' -f '2-' -s)" || exit 1
 else

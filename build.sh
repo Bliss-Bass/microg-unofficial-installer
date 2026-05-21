@@ -110,6 +110,12 @@ case "${BUILD_TYPE-}" in
   *) ui_error "Invalid build type => '${BUILD_TYPE-}'" "${LINENO-}" "${FUNCNAME-}" ;;
 esac
 
+if test -n "${TARGET_ARCH-}" && test "${SKIP_MODULE_VERSION_GEN:-0}" != '1' && test -x "${MAIN_DIR:?}/tools/generate-module-version.sh"; then
+  _version_channel="${MODULE_VERSION_CHANNEL:-keep}"
+  "${MAIN_DIR:?}/tools/generate-module-version.sh" "${MAIN_DIR:?}" "${_version_channel:?}" || ui_error 'Failed to generate module version' "${LINENO-}" "${FUNCNAME-}"
+  unset _version_channel
+fi
+
 save_last_title
 set_title 'Building the flashable zip...'
 
