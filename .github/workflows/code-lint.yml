@@ -11,13 +11,19 @@ on:
     branches:
       - "**"
     tags:
-      - "v*.*"
+      - "v*"
+      - "nightly"
   pull_request:
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"
+  cancel-in-progress: true
+
 jobs:
   shellchecker:
     name: "ShellChecker"
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       contents: read # Needed to checkout the repository (only required for private repositories)
 

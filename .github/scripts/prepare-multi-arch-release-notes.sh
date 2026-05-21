@@ -27,6 +27,7 @@ REPO_URL="${6:-}"
     test -z "${ZIP_VERSION?}" || printf 'Module version in tree: **%s**\n\n' "${ZIP_VERSION:?}"
     printf '%s\n\n' '**Release candidate** — pre-release build; not a stable release.'
   else
+    # shellcheck disable=SC2016 # Literal backticks in the donor line; ${REPO_URL} is expanded in the next printf
     printf '%s' '**If you want to help me you can donate to me using the `Sponsor` button at the top of '
     printf '%s\n' "[this repository](${REPO_URL:?})."
     printf '%s\n' 'Donations are appreciated and will always remain optional.**'
