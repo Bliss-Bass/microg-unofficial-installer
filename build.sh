@@ -96,6 +96,13 @@ while test "${#}" -gt 0; do
   shift
 done
 
+if test -n "${TARGET_ARCH-}"; then
+  case "${TARGET_ARCH:?}" in
+    'universal' | 'x86_64' | 'x86' | 'arm64-v8a' | 'armeabi-v7a') ;;
+    *) ui_error "Unsupported --arch value '${TARGET_ARCH?}' (use: universal, x86_64, x86, arm64-v8a, armeabi-v7a)" "${LINENO-}" "${FUNCNAME-}" ;;
+  esac
+fi
+
 test "${default_build_type:?}" = 'false' || BUILD_TYPE="${BUILD_TYPE:-full}"
 case "${BUILD_TYPE-}" in
   'full') export OPENSOURCE_ONLY='false' ;;
@@ -293,6 +300,54 @@ for _license in 'Apache-2.0' 'CC0-1.0' 'Info-ZIP' 'LGPL-3.0-or-later' 'Unlicense
   fi
 done
 
+# Download APKs from F-Droid / microG repos (per-arch split or universal fat / Java-only)
+if test -n "${TARGET_ARCH-}"; then
+  command 1> /dev/null 2>&1 -v 'xmlstarlet' || ui_error 'Missing: xmlstarlet (required for --arch builds)' "${LINENO-}" "${FUNCNAME-}"
+  command 1> /dev/null 2>&1 -v 'unzip' || ui_error 'Missing: unzip (required for --arch builds)' "${LINENO-}" "${FUNCNAME-}"
+  if test "${TARGET_ARCH:?}" = 'universal'; then
+    echo 'Pulling universal (fat / Java-only) APKs from F-Droid and microG repositories...'
+  else
+    echo "Pulling ${TARGET_ARCH?} APKs from F-Droid and microG repositories..."
+  fi
+  "${MAIN_DIR:?}/tools/pull_arch_apks.sh" "${TARGET_ARCH:?}" "${TEMP_DIR:?}" || ui_error 'Failed to pull APKs for the requested architecture' "${LINENO-}" "${FUNCNAME-}"
+
+  # Drop fallback microG / Store variants; the arch pull provides the primary APKs
+  for _variant in \
+    'priv-app/GmsCore-0.3.6' 'priv-app/GmsCoreA5K' 'priv-app/GmsCoreVtm' 'priv-app/GmsCoreVtmLegacy' \
+    'priv-app/FakeStore-0.3.6' 'priv-app/FakeStoreA5K' 'priv-app/FakeStoreLegacy'; do
+    rm -f "${TEMP_DIR:?}/zip-content/origin/${_variant:?}.apk" || :
+  done
+  unset _variant
+
+  # Drop bundled ARM-only variants that were not replaced for this architecture
+  _pruned_file_list="${TEMP_DIR:?}/zip-content/origin/file-list.dat.pruned"
+  : > "${_pruned_file_list:?}"
+  while IFS= read -r _file_list_line || test -n "${_file_list_line?}"; do
+    LOCAL_FILENAME="$(printf '%s' "${_file_list_line?}" | cut -d '|' -f '1' -s)" || continue
+    case "${LOCAL_FILENAME:?}" in
+      'priv-app/GmsCore-0.3.6' | 'priv-app/GmsCoreA5K' | 'priv-app/GmsCoreVtm' | 'priv-app/GmsCoreVtmLegacy' | \
+      'priv-app/FakeStore-0.3.6' | 'priv-app/FakeStoreA5K' | 'priv-app/FakeStoreLegacy') continue ;;
+      *) ;;
+    esac
+    full_filename="${TEMP_DIR:?}/zip-content/origin/${LOCAL_FILENAME:?}"
+    if test -f "${full_filename:?}.apk" || test -f "${full_filename:?}.jar"; then
+      printf '%s\n' "${_file_list_line?}" >> "${_pruned_file_list:?}"
+    fi
+  done 0< "${TEMP_DIR:?}/zip-content/origin/file-list.dat" || ui_error 'Failed to open the list of files to prune' "${LINENO-}" "${FUNCNAME-}"
+  mv -f "${_pruned_file_list:?}" "${TEMP_DIR:?}/zip-content/origin/file-list.dat" || ui_error 'Failed to update file-list.dat after arch pruning' "${LINENO-}" "${FUNCNAME-}"
+
+  # Remove APK/JAR blobs that are no longer referenced by file-list.dat
+  find "${TEMP_DIR:?}/zip-content/origin" -type f \( -name '*.apk' -o -name '*.jar' \) | while IFS= read -r _blob_path; do
+    _blob_rel="${_blob_path#"${TEMP_DIR:?}/zip-content/origin/"}"
+    _blob_rel="${_blob_rel%.apk}"
+    _blob_rel="${_blob_rel%.jar}"
+    if ! grep -q -F -- "${_blob_rel}|" "${TEMP_DIR:?}/zip-content/origin/file-list.dat"; then
+      rm -f "${_blob_path:?}" || ui_error "Failed to remove unlisted blob '${_blob_rel?}'" "${LINENO-}" "${FUNCNAME-}"
+    fi
+  done
+  unset _pruned_file_list _file_list_line LOCAL_FILENAME full_filename _blob_path _blob_rel
+fi
+
 # Verify bundled application files to ensure package integrity; downloaded files have already been validated
 if test -e "${TEMP_DIR:?}/zip-content/origin/file-list.dat"; then
   printf '%s' 'Verifying'
@@ -302,13 +357,20 @@ if test -e "${TEMP_DIR:?}/zip-content/origin/file-list.dat"; then
     full_filename="${TEMP_DIR:?}/zip-content/origin/${LOCAL_FILENAME:?}"
     if test -f "${full_filename:?}.apk"; then ext='.apk'; else ext='.jar'; fi
 
-    download_cached_if_lfs_pointer "${LOCAL_FILENAME:?}${ext:?}" "${TEMP_DIR:?}/zip-content/origin" "${FILE_HASH:?}"
+    if test ! -f "${full_filename:?}${ext:?}"; then
+      download_cached_if_lfs_pointer "${LOCAL_FILENAME:?}${ext:?}" "${TEMP_DIR:?}/zip-content/origin" "${FILE_HASH:?}"
+    fi
+
+    if test ! -f "${full_filename:?}${ext:?}"; then
+      if test -n "${TARGET_ARCH-}"; then continue; fi
+      ui_error "Missing file '${LOCAL_FILENAME:-}${ext}'" "${LINENO-}" "${FUNCNAME-}"
+    fi
 
     verify_sha256 "${full_filename:?}${ext:?}" "${FILE_HASH:?}" || {
       printf '\n'
       ui_error "Verification of '${LOCAL_FILENAME:-}' failed" "${LINENO-}" "${FUNCNAME-}"
     }
-  done 0< "${MAIN_DIR:?}/zip-content/origin/file-list.dat" || ui_error 'Failed to open the list of files to verify' "${LINENO-}" "${FUNCNAME-}"
+  done 0< "${TEMP_DIR:?}/zip-content/origin/file-list.dat" || ui_error 'Failed to open the list of files to verify' "${LINENO-}" "${FUNCNAME-}"
   printf '\n'
 fi
 

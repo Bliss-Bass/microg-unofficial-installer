@@ -18,6 +18,7 @@ REUSE_TOOL       = reuse
 # --- Target descriptions (for help logic) ---
 DESCRIPTION_TARGET_BUILDOTA    = 🚀 Build the flashable zip [Full edition]
 DESCRIPTION_TARGET_BUILDOTAOSS = 🚀 Build the flashable zip [OSS edition]
+DESCRIPTION_TARGET_BUILDOTAUNIVERSAL = 🚀 Build a full flashable zip with universal (fat / Java-only) MicroG APKs
 DESCRIPTION_TARGET_INSTALLTEST = 🧪 Test the flashable zip in a simulated Android recovery environment on your PC
 DESCRIPTION_TARGET_CLEAN       = 🧹 Remove build artifacts
 DESCRIPTION_TARGET_REUSE_LINT  = ⚖️ Verify license and copyright compliance (REUSE)
@@ -25,7 +26,7 @@ DESCRIPTION_TARGET_SPDX        = 📄 Generate the SBOM in SPDX format
 DESCRIPTION_TARGET_HELP        = ❓ Display this help
 
 # --- Primary targets ---
-.PHONY: all buildota buildotaoss installtest clean help
+.PHONY: all buildota buildotaoss buildotauniversal installtest clean help
 
 all: buildota buildotaoss ;
 
@@ -34,6 +35,9 @@ buildota:
 
 buildotaoss:
 	BUILD_TYPE=oss '$(CURDIR)/build.sh' --no-default-build-type --no-pause $(ARGS)
+
+buildotauniversal:
+	BUILD_TYPE=full '$(CURDIR)/build.sh' --no-default-build-type --no-pause --arch universal $(ARGS)
 
 installtest:
 	@'$(CURDIR)/recovery-simulator/recovery.sh' '$(CURDIR)'/output/*.zip

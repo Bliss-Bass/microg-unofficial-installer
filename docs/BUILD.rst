@@ -32,9 +32,41 @@ All build methods require:
    ``build.sh`` via the bundled BusyBox for Windows (no extra installation
    required).
 
+-  **xmlstarlet** and **unzip** — required only when building with
+   ``--arch`` (including ``universal``), to download APKs from F-Droid and
+   the microG repository.
+
+Architecture-specific builds
+----------------------------
+
+By default the zip uses bundled APKs (mostly ARM). To refresh MicroG and
+related apps from F-Droid / microG for a specific device ABI or for all
+ABIs in one package, pass ``--arch`` to ``build.sh``:
+
+.. code:: sh
+
+   BUILD_TYPE=full ./build.sh --no-default-build-type --no-pause --arch universal
+   BUILD_TYPE=full ./build.sh --no-default-build-type --no-pause --arch x86_64
+
+Or with make:
+
+.. code:: sh
+
+   make buildotauniversal
+   make buildota ARGS='--arch x86_64'
+
+Supported values:
+
+-  ``universal`` — Java-only APKs or multi-ABI fat APKs (installer trims
+   native libs to the device at flash time). Output filename includes
+   ``universal``.
+-  ``x86_64``, ``x86``, ``arm64-v8a``, ``armeabi-v7a`` — ABI-filtered APKs
+   from the repository indexes.
+
 Additional requirements depending on the build method:
 
--  **make / pdpmake** — for the ``make`` build method.
+-  **make / pdpmake** — for the ``make``, ``buildota``, ``buildotauniversal``,
+   and related targets.
 
 -  **Gradle wrapper** — for the ``./gradlew`` build method: no separate
    installation is needed; the wrapper (``gradlew`` / ``gradlew.bat``) included
