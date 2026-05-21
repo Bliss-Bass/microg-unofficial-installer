@@ -63,6 +63,19 @@ Supported values:
 -  ``x86_64``, ``x86``, ``arm64-v8a``, ``armeabi-v7a`` — ABI-filtered APKs
    from the repository indexes.
 
+CI releases
+-----------
+
+GitHub Actions builds **all** of the architectures above for each release:
+
+- **Nightly** — on pushes to the default branch (see ``.github/workflows/auto-nightly.yml``):
+  updates the ``nightly`` tag and publishes a prerelease with every arch zip.
+- **Version** — when a ``v*`` tag is pushed or when the "Tag and release"
+  workflow creates one (see ``.github/workflows/auto-release-from-tag.yml``):
+  publishes a release with every arch zip.
+- **Manual nightly tag** — pushing or moving the ``nightly`` tag also runs the
+  release workflow and refreshes the prerelease assets.
+
 Additional requirements depending on the build method:
 
 -  **make / pdpmake** — for the ``make``, ``buildota``, ``buildotauniversal``,

@@ -16,6 +16,9 @@ on:
       - "CHANGELOG.rst"
       - "LICENSE*.rst"
       - "build.sh"
+      - "Makefile"
+      - "tools/pull_arch_apks.sh"
+      - ".github/scripts/*"
     branches:
       - "**"
   schedule:
@@ -26,7 +29,7 @@ jobs:
   nightly:
     name: "Nightly"
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 120
     if: "${{ github.event_name == 'push' }}"
     concurrency:
       group: "${{ github.repository_id }}-${{ github.workflow }}-nightly"
@@ -64,13 +67,20 @@ jobs:
           restore-keys: "lfs-"
           path: "cache/lfs"
           enableCrossOsArchive: true
-      - name: "Build the flashable zip [OSS edition]"
+      - name: "Install build dependencies"
+        shell: bash
+        run: |
+          sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_SUSPEND=1 apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_SUSPEND=1 apt-get install -y -qq \
+            --no-install-recommends \
+            xmlstarlet unzip wget
+      - name: "Build flashable zips (all architectures, OSS edition)"
         id: "build"
         shell: bash
-        timeout-minutes: 10
+        timeout-minutes: 90
         run: |
-          # Building...
-          BUILD_TYPE='oss' '${{ github.workspace }}/build.sh'
+          chmod +x .github/scripts/build-all-arch-zips.sh
+          .github/scripts/build-all-arch-zips.sh oss "${{ github.workspace }}"
       - name: "Attest build provenance"
         id: "attest"
         uses: actions/attest-build-provenance@v4
@@ -85,19 +95,16 @@ jobs:
         run: |
           # Retrieving informations...
           test -n '${{ steps.build.outputs.ZIP_FOLDER }}' || exit 3
-          ZIP_FILENAME='${{ steps.build.outputs.ZIP_FILENAME }}'
           ZIP_VERSION='${{ steps.build.outputs.ZIP_VERSION }}'
+          ZIP_ARCH_COUNT='${{ steps.build.outputs.ZIP_ARCH_COUNT }}'
           ZIP_SHORT_COMMIT_ID='${{ steps.build.outputs.ZIP_SHORT_COMMIT_ID }}'
           ZIP_IS_ALPHA='${{ steps.build.outputs.ZIP_IS_ALPHA }}'
           ZIP_BUILD_TYPE='${{ steps.build.outputs.ZIP_BUILD_TYPE }}'
           ZIP_BUILD_TYPE_SUPPORTED='${{ steps.build.outputs.ZIP_BUILD_TYPE_SUPPORTED }}'
           ZIP_BRANCH_NAME='${{ steps.build.outputs.ZIP_BRANCH_NAME }}'
-          ZIP_MD5='${{ steps.build.outputs.ZIP_MD5 }}'
-          ZIP_SHA256='${{ steps.build.outputs.ZIP_SHA256 }}'
           ZIP_ATTESTATION_URL='${{ steps.attest.outputs.attestation-url }}'
           # Displaying informations...
-          printf '%s\n' "::notice::Filename: ${ZIP_FILENAME:-Missing}"
-          printf '%s\n' "::notice::Version: ${ZIP_VERSION:?} - Short commit ID: ${ZIP_SHORT_COMMIT_ID:?} - Is alpha: ${ZIP_IS_ALPHA:?} - Build type: ${ZIP_BUILD_TYPE:?}"
+          printf '%s\n' "::notice::Arch builds: ${ZIP_ARCH_COUNT:-0} - Version: ${ZIP_VERSION:?} - Short commit ID: ${ZIP_SHORT_COMMIT_ID:?} - Is alpha: ${ZIP_IS_ALPHA:?} - Build type: ${ZIP_BUILD_TYPE:?}"
           printf '%s\n' "::notice::Build type supported: ${ZIP_BUILD_TYPE_SUPPORTED:?}"
           if '${{ github.ref_name && github.ref_name != github.event.repository.default_branch }}'; then
             ZIP_RETENTION_DAYS=30
@@ -105,8 +112,10 @@ jobs:
           else
             ZIP_RETENTION_DAYS=10
           fi
-          printf '%s\n' "::notice::MD5: ${ZIP_MD5:-Missing}"
-          printf '%s\n' "::notice::SHA-256: ${ZIP_SHA256:-Missing}"
+          if test -f '${{ steps.build.outputs.ZIP_FOLDER }}/arch-build-manifest.txt'; then
+            printf '%s\n' '::notice::Build manifest:'
+            sed 's/^/::notice::  /' '${{ steps.build.outputs.ZIP_FOLDER }}/arch-build-manifest.txt'
+          fi
           printf '%s\n' "::notice::Logs retention days: ${{ github.retention_days }}"
           printf '%s\n' "::notice::Artifacts retention days: ${ZIP_RETENTION_DAYS:?}"
           printf '%s\n' "::notice::Attestation: ${ZIP_ATTESTATION_URL:-Missing}"
@@ -118,25 +127,13 @@ jobs:
           test -n "${our_tmp_dir?}" || exit "${?}"
           rm -r -f -- "${our_tmp_dir:?}"/* || exit "${?}" # Empty our temp dir (should be already empty, but we must be sure)
           # Preparing release notes...
-          release_type='nightly'
-          repo_url='${{ github.server_url }}/${{ github.repository }}'
-          {
-            printf '%s' "**If you'd like to support my work, you can find donation details on "
-            printf '%s\n' "[this page](${repo_url:?}/blob/main/docs/DONATE.rst)."
-            printf '%s\n' 'Contributions are greatly appreciated but always optional.**'
-            printf '\n'
-            if test "${release_type:?}" != 'release'; then
-              printf '%s\n\n' "Latest automatically built ZIP ($(date -u -- '+%Y/%m/%d' || :))."
-            fi
-            printf '%s\n\n' '## Verification'
-            test -z "${ZIP_SHA256?}" || printf '%s\n' "SHA-256: ${ZIP_SHA256:?}"
-            test -z "${ZIP_ATTESTATION_URL?}" || printf '\n%s\n' "Attestation: ${ZIP_ATTESTATION_URL:?}"
-            if test "${release_type:?}" = 'release'; then
-              printf '\n'
-              printf '%s\n\n' '## Changelog'
-              printf '\n%s\n' '[**Changelog**](./CHANGELOG.rst).'
-            fi
-          } 1> "${our_tmp_dir:?}/release-notes.md" || exit "${?}"
+          chmod +x .github/scripts/prepare-multi-arch-release-notes.sh
+          .github/scripts/prepare-multi-arch-release-notes.sh nightly \
+            "${our_tmp_dir:?}/release-notes.md" \
+            '${{ steps.build.outputs.ZIP_FOLDER }}' \
+            "${ZIP_VERSION:?}" \
+            "${ZIP_ATTESTATION_URL:-}" \
+            '${{ github.server_url }}/${{ github.repository }}'
           printf 'ZIP_RELEASE_NOTES=%s\n' "${our_tmp_dir:?}/release-notes.md" 1>> "${GITHUB_OUTPUT?}"
           # Preparing attestation file...
           old_attest_file='${{ steps.attest.outputs.bundle-path }}'
@@ -226,7 +223,7 @@ jobs:
         uses: softprops/action-gh-release@v3
         if: "${{ steps.nightly-logic.outputs.UPDATE_RELEASE == 'true' }}"
         with:
-          name: "${{ steps.build.outputs.ZIP_VERSION }} nightly"
+          name: "${{ steps.build.outputs.ZIP_VERSION }} nightly (${{ steps.build.outputs.ZIP_ARCH_COUNT }} builds)"
           tag_name: "nightly"
           target_commitish: "${{ github.sha }}"
           body_path: "${{ steps.info.outputs.ZIP_RELEASE_NOTES }}"
