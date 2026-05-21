@@ -81,6 +81,10 @@ while test "${#}" -gt 0; do
   case "${1?}" in
     --no-default-build-type) default_build_type='false' ;;
     --no-pause) export NO_PAUSE=1 ;;
+    --arch)
+      TARGET_ARCH="${2?Missing architecture for --arch}"
+      shift
+      ;;
     --)
       shift
       break
@@ -215,7 +219,11 @@ sanitize_filename_part()
 BRANCH_NAME=''
 FILENAME_COMMIT_ID="g${ZIP_SHORT_COMMIT_ID?}"
 test "${FILENAME_COMMIT_ID:?}" != 'g' || FILENAME_COMMIT_ID='NOGIT'
-FILENAME_START="${MODULE_ID:?}-${MODULE_VER:?}-"
+if test -n "${TARGET_ARCH-}"; then
+  FILENAME_START="${MODULE_ID:?}-${MODULE_VER:?}-${TARGET_ARCH:?}-"
+else
+  FILENAME_START="${MODULE_ID:?}-${MODULE_VER:?}-"
+fi
 FILENAME_MIDDLE="${FILENAME_COMMIT_ID:?}"
 FILENAME_END="-${BUILD_TYPE:?}-by-${MODULE_AUTHOR:?}"
 
