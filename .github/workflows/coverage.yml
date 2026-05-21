@@ -13,8 +13,9 @@ on:
       - ".travis.yml"
     branches:
       - "**"
-    tags:
-      - "v*.*"
+    # Release/nightly tags are built by auto-release-from-tag.yml (multi-arch).
+    tags-ignore:
+      - "**"
   pull_request:
 jobs:
   coverage:
@@ -59,15 +60,21 @@ jobs:
           restore-keys: "lfs-"
           path: "cache/lfs"
           enableCrossOsArchive: true
+      - name: "Install build dependencies"
+        shell: bash
+        run: |
+          sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_SUSPEND=1 apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_SUSPEND=1 apt-get install -y -qq \
+            --no-install-recommends \
+            xmlstarlet unzip wget
       - name: "Build (with coverage)"
         id: "build"
         shell: bash
-        timeout-minutes: 10
+        timeout-minutes: 30
         run: |
-          # Executing code coverage...
+          # Executing code coverage (universal OSS build; matches release APK sources).
           export BUILD_TYPE=oss
-          #sudo apt-get -qq -y install moreutils 1>/dev/null
-          bundle exec bashcov '${{ github.workspace }}/build.sh' # To timestamp the output pipe it to: TZ=UTC ts '[%H:%M:%S]'
+          bundle exec bashcov '${{ github.workspace }}/build.sh' --no-default-build-type --no-pause --arch universal
       - name: "Testing (with coverage)"
         shell: bash
         timeout-minutes: 10
@@ -77,7 +84,10 @@ jobs:
           echo '==========================='
           echo 'TESTING OF ZIP INSTALLATION'
           echo '==========================='
-          bundle exec bashcov '${{ github.workspace }}/recovery-simulator/recovery.sh' '${{ steps.build.outputs.ZIP_FOLDER }}/${{ steps.build.outputs.ZIP_FILENAME }}'
+          _zip="$(find '${{ steps.build.outputs.ZIP_FOLDER }}' -maxdepth 1 -name '*-universal-*-signed.zip' -type f | head -n 1)"
+          test -n "${_zip}" || _zip="$(find '${{ steps.build.outputs.ZIP_FOLDER }}' -maxdepth 1 -name '*-signed.zip' -type f | head -n 1)"
+          test -n "${_zip}" || { echo '::error::No signed zip found for install test'; exit 1; }
+          bundle exec bashcov '${{ github.workspace }}/recovery-simulator/recovery.sh' "${_zip}"
           printf '\n'
           echo '==============='
           echo 'RECOVERY OUTPUT'

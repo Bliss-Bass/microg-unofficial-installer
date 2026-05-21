@@ -10,9 +10,9 @@ on:
       - "**"
     branches:
       - "**"
-    tags:
-      - "v*"
-      - "nightly"
+    # Tags are validated on branch/PR pushes; release builds run in auto-release-from-tag.yml.
+    tags-ignore:
+      - "**"
   pull_request:
 
 concurrency:

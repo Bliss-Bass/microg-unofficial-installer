@@ -77,8 +77,11 @@ GitHub Actions builds **all** of the architectures above for each release:
 - **Release candidate** — tags containing ``-rc`` (e.g. ``v1.3.2-rc1``)
   publish a **prerelease** with all arch zips even if ``module.prop`` is still
   ``-alpha``.
-- **Manual nightly tag** — pushing or moving the ``nightly`` tag also runs the
-  release workflow and refreshes the prerelease assets.
+- **Manual nightly tag** — pushing or moving the ``nightly`` tag runs only
+  **Auto-release from tag** (not Coverage or Code lint). Use
+  ``git push origin HEAD:refs/tags/nightly`` for the tag alone; avoid
+  ``git push origin nightly --tags`` if branch ``nightly`` exists, or that
+  also triggers branch workflows.
 
 Additional requirements depending on the build method:
 
