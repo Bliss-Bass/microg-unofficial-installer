@@ -84,6 +84,10 @@ case "${CHANNEL}" in
       *) VERSION="${VERSION_BASE}" ;;
     esac
     ;;
+  *)
+    echo "Invalid channel '${CHANNEL}' (use: alpha, stable, keep)" >&2
+    exit 1
+    ;;
 esac
 
 # versionCode must monotonically increase for Magisk/module managers
