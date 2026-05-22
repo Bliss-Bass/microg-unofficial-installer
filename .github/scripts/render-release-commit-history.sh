@@ -24,6 +24,16 @@ HEAD_SHA="${RELEASE_NOTES_HEAD_SHA:-}"
 CURRENT_TAG="${RELEASE_NOTES_CURRENT_TAG:-}"
 COMMIT_LIMIT="${RELEASE_NOTES_COMMIT_LIMIT:-30}"
 
+TMPDIR="${TMPDIR:-/tmp}"
+_tag_list_file="$(mktemp "${TMPDIR}/release-notes-tags.XXXXXX")"
+_recent_commits_file="$(mktemp "${TMPDIR}/release-notes-commits.XXXXXX")"
+_commit_log_file="$(mktemp "${TMPDIR}/release-notes-log.XXXXXX")"
+_release_hits_file="$(mktemp "${TMPDIR}/release-notes-hits.XXXXXX")"
+cleanup() {
+  rm -f "${_tag_list_file:?}" "${_recent_commits_file:?}" "${_commit_log_file:?}" "${_release_hits_file:?}"
+}
+trap cleanup EXIT
+
 if [[ -z "${HEAD_SHA}" ]]; then
   HEAD_SHA="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
 fi
@@ -35,6 +45,7 @@ git -C "${REPO_ROOT}" fetch --tags --force origin 2>/dev/null || git -C "${REPO_
 _format_release_tag_label() {
   local tag="${1:?}"
   case "${tag}" in
+    # shellcheck disable=SC2016 # Markdown backticks are literal, not command substitution
     nightly) printf '%s' '`nightly`' ;;
     *-rc* | *-RC*) printf '%s' "\`${tag}\` (RC)" ;;
     *) printf '%s' "\`${tag}\`" ;;
@@ -43,6 +54,10 @@ _format_release_tag_label() {
 
 declare -A COMMIT_TAGS=()
 declare -A COMMIT_TAG_SORT=()
+
+git -C "${REPO_ROOT}" tag -l 'v*' 'nightly' > "${_tag_list_file}.raw" || true
+sort -u "${_tag_list_file}.raw" > "${_tag_list_file}" || true
+rm -f "${_tag_list_file}.raw"
 
 while IFS= read -r tag; do
   [[ -n "${tag}" ]] || continue
@@ -57,7 +72,7 @@ while IFS= read -r tag; do
   else
     COMMIT_TAGS["${commit}"]="${tag_label}"
   fi
-done < <(git -C "${REPO_ROOT}" tag -l 'v*' 'nightly' | sort -u)
+done < "${_tag_list_file}"
 
 printf '%s\n\n' '## Build info'
 printf '%s\n' "- **Commit:** [\`${HEAD_SHORT}\`](${REPO_URL}/commit/${HEAD_SHA})"
@@ -67,7 +82,8 @@ fi
 printf '\n'
 
 # Summarize release tags that appear in the commit window
-mapfile -t _recent_commits < <(git -C "${REPO_ROOT}" log -n "${COMMIT_LIMIT}" --format='%H' "${HEAD_SHA}")
+git -C "${REPO_ROOT}" log -n "${COMMIT_LIMIT}" --format='%H' "${HEAD_SHA}" > "${_recent_commits_file}"
+mapfile -t _recent_commits < "${_recent_commits_file}"
 declare -A _recent_set=()
 for _c in "${_recent_commits[@]}"; do
   _recent_set["${_c}"]=1
@@ -76,23 +92,21 @@ done
 _release_hits=()
 for _key in "${!COMMIT_TAG_SORT[@]}"; do
   _commit="${_key%%:*}"
-  _tag="${_key#*:}"
   if [[ -n "${_recent_set[${_commit}]+x}" ]]; then
+    _tag="${_key#*:}"
     _release_hits+=("${COMMIT_TAG_SORT[${_key}]}|${_commit}|${_tag}")
   fi
 done
 
 if ((${#_release_hits[@]} > 0)); then
-  IFS=$'\n' _release_hits_sorted=($(sort -t'|' -k1,1nr <<< "$(printf '%s\n' "${_release_hits[@]}")"))
-  unset IFS
+  printf '%s\n' "${_release_hits[@]}" | sort -t'|' -k1,1nr > "${_release_hits_file}"
+  mapfile -t _release_hits_sorted < "${_release_hits_file}"
   printf '%s\n\n' '### Release tags in this commit window'
   _shown=0
   _last_commit=''
   for _entry in "${_release_hits_sorted[@]}"; do
-    _ts="${_entry%%|*}"
     _rest="${_entry#*|}"
     _commit="${_rest%%|*}"
-    _tag="${_rest#*|}"
     if [[ "${_commit}" == "${_last_commit}" ]]; then
       continue
     fi
@@ -111,6 +125,7 @@ fi
 printf '%s\n\n' "## Recent commits (last ${COMMIT_LIMIT})"
 printf '%s\n\n' 'Newest first. Tags mark commits that were published as a nightly, RC, or version release.'
 
+git -C "${REPO_ROOT}" log -n "${COMMIT_LIMIT}" --format='%H|%h|%s|%ci' "${HEAD_SHA}" > "${_commit_log_file}"
 while IFS='|' read -r hash short subject date; do
   [[ -n "${hash}" ]] || continue
   subject="${subject//\`/}"
@@ -123,4 +138,4 @@ while IFS='|' read -r hash short subject date; do
     markers="${markers} — tagged: ${COMMIT_TAGS[${hash}]}"
   fi
   printf '%s\n' "- [\`${short}\`](${REPO_URL}/commit/${hash}) (${date%% *}) ${subject}${markers}"
-done < <(git -C "${REPO_ROOT}" log -n "${COMMIT_LIMIT}" --format='%H|%h|%s|%ci' "${HEAD_SHA}")
+done < "${_commit_log_file}"
