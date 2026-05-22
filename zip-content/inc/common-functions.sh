@@ -376,6 +376,7 @@ _verify_system_partition()
 
   for _path in ${1?}; do
     test -n "${_path?}" || continue
+    if _is_recovery_stub_system_mountpoint "${_path:?}"; then continue; fi
     _path="$(_canonicalize "${_path:?}")"
 
     if test -e "${_path:?}/system/build.prop"; then
@@ -418,6 +419,16 @@ _set_system_path_from_mountpoint()
 
   ui_warning "System path not found from '${1?}' mountpoint"
   return 1
+}
+
+_system_mountpoint_has_rom()
+{
+  test -e "${1:?}/system/build.prop" || test -e "${1:?}/build.prop"
+}
+
+_is_recovery_stub_system_mountpoint()
+{
+  test "${RECOVERY_FAKE_SYSTEM:-false}" = 'true' && test "${1:?}" = '/system'
 }
 
 _get_mount_info()
@@ -868,6 +879,9 @@ _find_and_mount_system()
   fi
 
   _sys_mountpoint_list="$(generate_mountpoint_list 'system' "${_additional_system_mountpoint?}" '/system_root' || :)${NL:?}${TMP_PATH:?}/system_mountpoint"
+  if test "${RECOVERY_FAKE_SYSTEM:?}" = 'true'; then
+    _sys_mountpoint_list="$(printf '%s\n' "${_sys_mountpoint_list?}" | grep -v -x -F '/system' || :)"
+  fi
   ui_debug 'System mountpoint list:'
   ui_debug "${_sys_mountpoint_list?}"
   ui_debug ''
@@ -885,7 +899,7 @@ _find_and_mount_system()
       SYS_MOUNTPOINT="${LAST_MOUNTPOINT:?}"
       UNMOUNT_SYSTEM="${LAST_PARTITION_MUST_BE_UNMOUNTED:?}"
     else
-      ui_error "The ROM cannot be found!!!" 123
+      ui_error "The system partition cannot be found or mounted!!!" 123
     fi
   fi
 
@@ -956,6 +970,15 @@ mount_partition_if_possible()
   ui_debug "Checking ${_partition_name?}..."
 
   for _mp in "${@}"; do
+    if test "${_partition_name:?}" = 'system'; then
+      if _is_recovery_stub_system_mountpoint "${_mp:?}"; then continue; fi
+      if is_mounted "${_mp:?}" && _system_mountpoint_has_rom "${_mp:?}"; then
+        LAST_MOUNTPOINT="${_mp:?}"
+        ui_debug "Already mounted: ${LAST_MOUNTPOINT?}"
+        return 0 # Already mounted
+      fi
+      continue
+    fi
     if is_mounted "${_mp:?}"; then
       LAST_MOUNTPOINT="${_mp:?}"
       ui_debug "Already mounted: ${LAST_MOUNTPOINT?}"
@@ -974,6 +997,8 @@ mount_partition_if_possible()
       '/mnt'/* | "${TMP_PATH:?}"/*) continue ;; # NOTE: These paths can only be mounted manually (example: /mnt/system)
       *) ;;
     esac
+
+    if test "${_partition_name:?}" = 'system' && _is_recovery_stub_system_mountpoint "${_mp:?}"; then continue; fi
 
     if _mount_helper 2> /dev/null -o 'ro' "${_mp:?}"; then
       LAST_MOUNTPOINT="${_mp:?}"
