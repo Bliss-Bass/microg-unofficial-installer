@@ -102,6 +102,9 @@ GitHub releases need a tag like ``v0.3.15.250932.5084`` (no ``-alpha`` in
   ``git push origin HEAD:refs/tags/nightly`` for the tag alone; avoid
   ``git push origin nightly --tags`` if branch ``nightly`` exists, or that
   also triggers branch workflows.
+- **Release notes** — nightly and tagged releases auto-generate notes with
+  SHA-256 checksums, build commit metadata, the last 30 commits, and markers
+  for any ``nightly``, RC, or version tags in that window.
 
 Additional requirements depending on the build method:
 

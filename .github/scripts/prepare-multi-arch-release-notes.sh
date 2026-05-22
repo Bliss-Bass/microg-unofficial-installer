@@ -5,12 +5,15 @@
 
 set -euo pipefail
 
-RELEASE_TYPE="${1:?Missing release type (nightly or release)}"
+RELEASE_TYPE="${1:?Missing release type (nightly, rc, or release)}"
 OUT_FILE="${2:?Missing output path}"
 ZIP_FOLDER="${3:?Missing zip folder}"
 ZIP_VERSION="${4:-}"
 ZIP_ATTESTATION_URL="${5:-}"
 REPO_URL="${6:-}"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="${RELEASE_NOTES_REPO_ROOT:-$(cd "${SCRIPT_DIR}/../.." && pwd)}"
 
 {
   if test "${RELEASE_TYPE:?}" = 'nightly'; then
@@ -66,6 +69,15 @@ REPO_URL="${6:-}"
   fi
 
   test -z "${ZIP_ATTESTATION_URL?}" || printf '\n%s\n' "Attestation: ${ZIP_ATTESTATION_URL:?}"
+
+  if test -n "${REPO_URL?}" && test -f "${SCRIPT_DIR:?}/render-release-commit-history.sh"; then
+    printf '\n'
+    RELEASE_NOTES_REPO_ROOT="${REPO_ROOT:?}" \
+      RELEASE_NOTES_HEAD_SHA="${RELEASE_NOTES_HEAD_SHA:-}" \
+      RELEASE_NOTES_CURRENT_TAG="${RELEASE_NOTES_CURRENT_TAG:-}" \
+      RELEASE_NOTES_COMMIT_LIMIT="${RELEASE_NOTES_COMMIT_LIMIT:-30}" \
+      bash "${SCRIPT_DIR:?}/render-release-commit-history.sh" "${REPO_URL:?}"
+  fi
 
   if test "${RELEASE_TYPE:?}" = 'release'; then
     printf '\n'

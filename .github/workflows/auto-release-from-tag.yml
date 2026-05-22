@@ -197,7 +197,10 @@ jobs:
           rm -r -f -- "${our_tmp_dir:?}"/* || exit "${?}"
           # Preparing release notes...
           release_type="${release_label:?}"
-          chmod +x .github/scripts/prepare-multi-arch-release-notes.sh
+          chmod +x .github/scripts/prepare-multi-arch-release-notes.sh .github/scripts/render-release-commit-history.sh
+          export RELEASE_NOTES_REPO_ROOT="${{ github.workspace }}"
+          export RELEASE_NOTES_HEAD_SHA="${{ github.sha }}"
+          export RELEASE_NOTES_CURRENT_TAG="${{ steps.release-logic.outputs.TAG_NAME }}"
           .github/scripts/prepare-multi-arch-release-notes.sh "${release_type:?}" \
             "${our_tmp_dir:?}/release-notes.md" \
             '${{ steps.build.outputs.ZIP_FOLDER }}' \
@@ -247,8 +250,8 @@ jobs:
           tag_name: "${{ steps.release-logic.outputs.TAG_NAME }}"
           target_commitish: "${{ github.sha }}"
           body_path: "${{ steps.info.outputs.ZIP_RELEASE_NOTES }}"
-          append_body: "${{ steps.release-logic.outputs.IS_STABLE_RELEASE == 'true' || steps.release-logic.outputs.IS_RC_RELEASE == 'true' }}"
-          generate_release_notes: "${{ steps.release-logic.outputs.IS_STABLE_RELEASE == 'true' || steps.release-logic.outputs.IS_RC_RELEASE == 'true' }}"
+          append_body: false
+          generate_release_notes: false
           draft: false
           prerelease: "${{ steps.release-logic.outputs.IS_NIGHTLY_RELEASE == 'true' || steps.release-logic.outputs.IS_RC_RELEASE == 'true' }}"
           make_latest: "${{ steps.release-logic.outputs.IS_STABLE_RELEASE == 'true' }}"

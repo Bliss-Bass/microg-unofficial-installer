@@ -128,7 +128,10 @@ jobs:
           test -n "${our_tmp_dir?}" || exit "${?}"
           rm -r -f -- "${our_tmp_dir:?}"/* || exit "${?}" # Empty our temp dir (should be already empty, but we must be sure)
           # Preparing release notes...
-          chmod +x .github/scripts/prepare-multi-arch-release-notes.sh
+          chmod +x .github/scripts/prepare-multi-arch-release-notes.sh .github/scripts/render-release-commit-history.sh
+          export RELEASE_NOTES_REPO_ROOT="${{ github.workspace }}"
+          export RELEASE_NOTES_HEAD_SHA="${{ github.sha }}"
+          export RELEASE_NOTES_CURRENT_TAG='nightly'
           .github/scripts/prepare-multi-arch-release-notes.sh nightly \
             "${our_tmp_dir:?}/release-notes.md" \
             '${{ steps.build.outputs.ZIP_FOLDER }}' \
@@ -139,7 +142,7 @@ jobs:
           # Preparing attestation file...
           old_attest_file='${{ steps.attest.outputs.bundle-path }}'
           if test -n "${old_attest_file?}"; then
-            new_attest_file="${our_tmp_dir:?}/${release_type:?}-$(basename -- "${old_attest_file:?}")" || exit "${?}"
+            new_attest_file="${our_tmp_dir:?}/nightly-$(basename -- "${old_attest_file:?}")" || exit "${?}"
             cp -f -T -- "${old_attest_file:?}" "${new_attest_file:?}" || exit "${?}"
             printf 'ZIP_ATTESTATION_FILE=%s\n' "${new_attest_file:?}" 1>> "${GITHUB_OUTPUT?}"
           fi
