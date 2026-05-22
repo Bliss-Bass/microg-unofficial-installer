@@ -44,11 +44,11 @@ git -C "${REPO_ROOT}" fetch --tags --force origin 2>/dev/null || git -C "${REPO_
 
 _format_release_tag_label() {
   local tag="${1:?}"
+  local md_tick='`'
   case "${tag}" in
-    # shellcheck disable=SC2016 # Markdown backticks are literal, not command substitution
-    nightly) printf '%s' '`nightly`' ;;
-    *-rc* | *-RC*) printf '%s' "\`${tag}\` (RC)" ;;
-    *) printf '%s' "\`${tag}\`" ;;
+    nightly) printf '%s' "${md_tick}nightly${md_tick}" ;;
+    *-rc* | *-RC*) printf '%s' "${md_tick}${tag}${md_tick} (RC)" ;;
+    *) printf '%s' "${md_tick}${tag}${md_tick}" ;;
   esac
 }
 
