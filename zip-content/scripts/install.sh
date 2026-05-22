@@ -53,6 +53,7 @@ APP_NOMINATIMBACKEND="$(parse_setting 'app' 'NOMINATIMBACKEND' "${APP_NOMINATIMB
 
 APP_FDROIDPRIVEXT="$(parse_setting 'app' 'FDROIDPRIVEXT' "${APP_FDROIDPRIVEXT:?}")"
 APP_AURORASERVICES="$(parse_setting 'app' 'AURORASERVICES' "${APP_AURORASERVICES:?}")"
+APP_AURORASTORE="$(parse_setting 'app' 'AURORASTORE' "${APP_AURORASTORE:?}")"
 APP_NEWPIPE="$(parse_setting 'app' 'NEWPIPE' "${APP_NEWPIPE:?}")"
 APP_MYLOCATION="$(parse_setting 'app' 'MYLOCATION' "${APP_MYLOCATION:?}")"
 
@@ -123,6 +124,7 @@ if test "${SETUP_TYPE:?}" = 'install'; then
 
   setup_app "${APP_FDROIDPRIVEXT:?}" 'APP_FDROIDPRIVEXT' 'F-Droid Privileged Extension' 'FDroidPrivilegedExtension' 'priv-app'
   setup_app "${APP_AURORASERVICES:?}" 'APP_AURORASERVICES' 'Aurora Services' 'AuroraServices' 'priv-app'
+  setup_app "${APP_AURORASTORE:?}" 'APP_AURORASTORE' 'Aurora Store' 'AuroraStore' 'app' true
 
   if test "${SUPPORTED_ARCH:?}" = 'true' && setup_app "${APP_NEWPIPE:?}" 'APP_NEWPIPE' 'NewPipe' 'NewPipe' 'app' true; then
     :

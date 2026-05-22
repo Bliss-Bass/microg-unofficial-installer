@@ -85,6 +85,8 @@ FDroidPrivileged|
 FDroidPriv|
 AuroraServices|com.aurora.services
 auroraservices|
+AuroraStore|com.aurora.store
+aurorastore|
 
 NewPipe|org.schabi.newpipe
 NewPipeLegacy|org.schabi.newpipelegacy

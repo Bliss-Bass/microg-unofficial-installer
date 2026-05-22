@@ -38,6 +38,7 @@ MICROG_REPO='https://microg.org/fdroid/repo'
 FDROID_APPS=(
   'org.fdroid.fdroid.privileged:FDroidPrivilegedExtension:FDroidPrivilegedExtension:priv-app'
   'com.aurora.services:AuroraServices:AuroraServices:priv-app'
+  'com.aurora.store:AuroraStore:AuroraStore:app:libs'
   'org.fitchfamily.android.dejavu:DejaVuBackend:DejaVuBackend:app'
   'org.microg.nlp.backend.nominatim:NominatimGeocoderBackend:NominatimGeocoderBackend:app'
 )
@@ -167,8 +168,8 @@ download_app() {
 }
 
 for app in "${FDROID_APPS[@]}"; do
-  IFS=':' read -r pkg module install_name dir <<< "${app}"
-  download_app "${pkg}" "${module}" "${install_name}" "${dir}" '' "${FDROID_ACTIVE_REPO}" 'fdroid_index.xml'
+  IFS=':' read -r pkg module install_name dir extract <<< "${app}"
+  download_app "${pkg}" "${module}" "${install_name}" "${dir}" "${extract:-}" "${FDROID_ACTIVE_REPO}" 'fdroid_index.xml'
 done
 
 for app in "${MICROG_APPS[@]}"; do

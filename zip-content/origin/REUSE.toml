@@ -40,6 +40,11 @@ SPDX-FileCopyrightText = "2015 NewPipe Team"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
 [[annotations]]
+path = "app/AuroraStore.apk"
+SPDX-FileCopyrightText = "2018 Rahul Kumar Patel"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
+[[annotations]]
 path = "priv-app/AuroraServices.apk"
 SPDX-FileCopyrightText = "2018 Rahul Kumar Patel"
 SPDX-License-Identifier = "GPL-3.0-or-later"
