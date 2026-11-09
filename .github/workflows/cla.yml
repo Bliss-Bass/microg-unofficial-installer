@@ -1,3 +1,7 @@
+---
+# SPDX-FileCopyrightText: NONE
+# SPDX-License-Identifier: CC0-1.0
+
 # BlissLabs CLA check. Copied to other orgs by setup-cla.sh.
 # Signatures live in a central repo so contributors sign once, not per tree.
 name: CLA Assistant
