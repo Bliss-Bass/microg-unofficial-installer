@@ -84,16 +84,20 @@ running ``.github/scripts/build-all-arch-zips.sh`` to build others.
 Release token
 -------------
 
-If the organization limits the built-in ``GITHUB_TOKEN`` to read-only, release
-creation fails with ``Resource not accessible by integration``. The workflows
-then need a fine-grained personal access token stored as the ``RELEASE_TOKEN``
-Actions secret (they fall back to ``GITHUB_TOKEN`` when it is not set). Run:
+The built-in ``GITHUB_TOKEN`` cannot point a tag at commits that add or change
+files under ``.github/workflows`` (that needs the ``workflows`` permission,
+which ``GITHUB_TOKEN`` never has), so creating releases or moving the
+``nightly`` tag fails with ``Resource not accessible by integration``. The
+workflows therefore use a fine-grained personal access token stored as the
+``RELEASE_TOKEN`` Actions secret (falling back to ``GITHUB_TOKEN`` when it is
+not set). Run:
 
 .. code:: sh
 
    tools/setup-release-token.sh --owner Bliss-Bass --repo microg-unofficial-installer
 
-It opens a pre-filled token page (``Contents: Read and write``, one year),
+It opens a pre-filled token page (``Contents`` and ``Workflows``: Read and
+write, one year),
 checks the pasted token can write to the repository, then copies it to the
 clipboard and opens the organization's new-secret page, or sets the secret
 directly with ``--set-secret`` when the GitHub CLI is logged in. Run it again

@@ -179,7 +179,8 @@ TOKEN_DESCRIPTION="Lets GitHub Actions in ${OWNER}/${REPO} create releases and m
 enc_name="$(urlencode "${TOKEN_NAME}")"
 enc_description="$(urlencode "${TOKEN_DESCRIPTION}")"
 enc_owner="$(urlencode "${OWNER}")"
-TOKEN_URL="https://github.com/settings/personal-access-tokens/new?name=${enc_name}&description=${enc_description}&target_name=${enc_owner}&expires_in=${EXPIRES_IN}&contents=write"
+# Workflows write is needed because GitHub refuses to point a tag at commits that change .github/workflows without it
+TOKEN_URL="https://github.com/settings/personal-access-tokens/new?name=${enc_name}&description=${enc_description}&target_name=${enc_owner}&expires_in=${EXPIRES_IN}&contents=write&workflows=write"
 
 info "== Step 1/3: create the token for ${OWNER}/${REPO}"
 info ''
@@ -189,7 +190,8 @@ info 'The page is pre-filled. Before clicking "Generate token":'
 info "  1. Resource owner is ${OWNER}."
 info "  2. Repository access: choose \"Only select repositories\" and pick ${REPO}."
 info '     (GitHub does not allow pre-selecting repositories.)'
-info '  3. Permissions shows "Contents: Read and write" (Metadata: Read-only is added automatically).'
+info '  3. Permissions show "Contents: Read and write" and "Workflows: Read and write"'
+info '     (Metadata: Read-only is added automatically).'
 info 'Then generate the token and copy it.'
 info ''
 
