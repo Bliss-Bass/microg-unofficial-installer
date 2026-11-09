@@ -5,6 +5,9 @@
 conf_lfs_get_mirror_by_sha256()
 {
   case "${1?}" in
+    'e5e6cba078bdec812b5450599350e5c1a12c8b7438da5bf77123af170f8c1a35')
+      printf '%s\n' 'github.com/microg/GmsCore/releases/download/v0.3.17.252432/com.google.android.gms-252432034.apk'
+      ;;
     '740df4ca655fbdaf5fcb126638fe4ceca51f568ca072a5e543c83ebd3c2dc098')
       printf '%s\n' 'github.com/microg/GmsCore/releases/download/v0.3.14.250932/com.google.android.gms-250932028.apk'
       ;;
