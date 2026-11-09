@@ -66,7 +66,10 @@ Supported values:
 CI releases
 -----------
 
-GitHub Actions builds **all** of the architectures above for each release:
+GitHub Actions builds the ``universal`` and ``x86_64`` zips for each release.
+Upstream only publishes multi-ABI or Java-only APKs, so the other ABI builds
+would be identical to ``universal``; set ``ARCH_LIST`` (comma-separated) when
+running ``.github/scripts/build-all-arch-zips.sh`` to build others.
 
 - **Nightly** — on pushes to the default branch (see ``.github/workflows/auto-nightly.yml``):
   updates the ``nightly`` tag and publishes a prerelease with every arch zip.
@@ -77,6 +80,24 @@ GitHub Actions builds **all** of the architectures above for each release:
 - **Release candidate** — tags containing ``-rc`` (e.g. ``v1.3.2-rc1``)
   publish a **prerelease** with all arch zips even if ``module.prop`` is still
   ``-alpha``.
+
+Release token
+-------------
+
+If the organization limits the built-in ``GITHUB_TOKEN`` to read-only, release
+creation fails with ``Resource not accessible by integration``. The workflows
+then need a fine-grained personal access token stored as the ``RELEASE_TOKEN``
+Actions secret (they fall back to ``GITHUB_TOKEN`` when it is not set). Run:
+
+.. code:: sh
+
+   tools/setup-release-token.sh --owner Bliss-Bass --repo microg-unofficial-installer
+
+It opens a pre-filled token page (``Contents: Read and write``, one year),
+checks the pasted token can write to the repository, then copies it to the
+clipboard and opens the organization's new-secret page, or sets the secret
+directly with ``--set-secret`` when the GitHub CLI is logged in. Run it again
+before the token expires.
 
 Module version (``module.prop``)
 --------------------------------

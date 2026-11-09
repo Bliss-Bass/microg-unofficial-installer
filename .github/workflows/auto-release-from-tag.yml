@@ -22,11 +22,48 @@ on:
         type: "string"
 
 jobs:
+  gate:
+    name: "Check trigger"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      skip: "${{ steps.check.outputs.skip }}"
+    steps:
+      - name: "Skip nightly tags moved by Auto-nightly"
+        id: "check"
+        uses: actions/github-script@v9
+        with:
+          retries: 3
+          script: |
+            /* jshint esversion: 11 */
+            // Auto-nightly moves the tag as an annotated "[auto-nightly]" tag after publishing; a manual lightweight push still rebuilds
+            let skip = 'false';
+            if(context.eventName === 'push' && context.ref === 'refs/tags/nightly') {
+              const ref = await github.rest.git.getRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: 'tags/nightly'
+              }).catch(() => null);
+              if(ref && ref.data && ref.data.object && ref.data.object.type === 'tag') {
+                const tag = await github.rest.git.getTag({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  tag_sha: ref.data.object.sha
+                }).catch(() => null);
+                if(tag && tag.data && tag.data.message && tag.data.message.includes('[auto-nightly]')) skip = 'true';
+              }
+            }
+            console.log('Skip: ' + skip);
+            core.setOutput('skip', skip);
+
   release:
     name: "Release"
+    needs: [gate]
     runs-on: ubuntu-latest
     timeout-minutes: 120
-    if: "${{ inputs.tag-name || startsWith(github.ref, 'refs/tags/') }}"
+    if: "${{ needs.gate.outputs.skip != 'true' && (inputs.tag-name || startsWith(github.ref, 'refs/tags/')) }}"
     concurrency:
       group: "${{ github.repository_id }}-${{ github.workflow }}-${{ inputs.tag-name || github.ref_name }}"
       cancel-in-progress: false
@@ -219,6 +256,7 @@ jobs:
         uses: actions/github-script@v9
         if: "${{ steps.release-logic.outputs.CREATE_RELEASE == 'true' && steps.release-logic.outputs.IS_NIGHTLY_RELEASE == 'true' }}"
         with:
+          github-token: "${{ secrets.RELEASE_TOKEN || github.token }}"
           retries: 3
           script: |
             /* jshint esversion: 11 */
@@ -243,9 +281,8 @@ jobs:
       - name: "Create release"
         uses: softprops/action-gh-release@v3
         if: "${{ steps.release-logic.outputs.CREATE_RELEASE == 'true' }}"
-        env:
-          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         with:
+          token: "${{ secrets.RELEASE_TOKEN || github.token }}"
           name: "${{ steps.release-logic.outputs.IS_NIGHTLY_RELEASE == 'true' && format('{0} nightly ({1} builds)', steps.build.outputs.ZIP_VERSION, steps.build.outputs.ZIP_ARCH_COUNT) || (steps.release-logic.outputs.IS_RC_RELEASE == 'true' && format('{0} ({1} builds)', steps.release-logic.outputs.TAG_NAME, steps.build.outputs.ZIP_ARCH_COUNT) || steps.release-logic.outputs.TAG_NAME) }}"
           tag_name: "${{ steps.release-logic.outputs.TAG_NAME }}"
           target_commitish: "${{ github.sha }}"

@@ -7,7 +7,8 @@ set -euo pipefail
 
 BUILD_TYPE="${1:?Missing build type (full or oss)}"
 REPO_ROOT="${2:-${GITHUB_WORKSPACE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}}"
-ARCH_LIST="${ARCH_LIST:-universal,x86_64,x86,arm64-v8a,armeabi-v7a}"
+# Upstream only publishes multi-ABI or Java-only APKs, so the other ABI builds would be byte-identical to universal
+ARCH_LIST="${ARCH_LIST:-universal,x86_64}"
 
 cd "${REPO_ROOT:?}"
 

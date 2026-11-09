@@ -20,6 +20,7 @@ jobs:
     outputs:
       tag-name: "${{ steps.repo-info.outputs.version }}"
       tag-creation-success: "${{ steps.tag-creation.outputs.result }}"
+      uses-release-token: "${{ steps.repo-info.outputs.uses-release-token }}"
     permissions:
       contents: write # Needed to create a tag
 
@@ -34,12 +35,15 @@ jobs:
       - name: "Parse info"
         id: "repo-info"
         shell: bash
+        env:
+          HAS_RELEASE_TOKEN: "${{ secrets.RELEASE_TOKEN != '' }}"
         run: |
           # Parsing info...
           version="$(grep -m 1 -e '^version=' -- './zip-content/module.prop' | cut -d '=' -f '2-' -s)" || exit "${?}"
           now="$(date -u -Is)" || exit "${?}"
           printf 'version=%s\n' "${version:?}" 1>> "${GITHUB_OUTPUT?}" || exit "${?}"
           printf 'now=%s\n' "${now:?}" 1>> "${GITHUB_OUTPUT?}" || exit "${?}"
+          printf 'uses-release-token=%s\n' "${HAS_RELEASE_TOKEN:?}" 1>> "${GITHUB_OUTPUT?}" || exit "${?}"
       - name: "Create annotated tag"
         id: tag-creation
         uses: actions/github-script@v9
@@ -49,6 +53,7 @@ jobs:
           TAG_NAME: "${{ steps.repo-info.outputs.version }}"
           TAG_DATE: "${{ steps.repo-info.outputs.now }}"
         with:
+          github-token: "${{ secrets.RELEASE_TOKEN || github.token }}"
           result-encoding: string
           retries: 3
           script: |
@@ -124,8 +129,10 @@ jobs:
   call-workflow:
     name: "Call workflow"
     needs: [create-tag]
-    if: "${{ needs.create-tag.outputs.tag-creation-success == 'true' }}"
+    # A tag created with RELEASE_TOKEN already triggers "Auto-release from tag" through its push event
+    if: "${{ needs.create-tag.outputs.tag-creation-success == 'true' && needs.create-tag.outputs.uses-release-token != 'true' }}"
     uses: "./.github/workflows/auto-release-from-tag.yml"
+    secrets: inherit
     with:
       tag-name: "${{ needs.create-tag.outputs.tag-name }}"
     permissions:

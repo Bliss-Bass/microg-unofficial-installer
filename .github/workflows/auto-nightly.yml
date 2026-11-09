@@ -167,6 +167,7 @@ jobs:
         uses: actions/github-script@v9
         if: "${{ steps.nightly-logic.outputs.UPDATE_RELEASE == 'true' }}"
         with:
+          github-token: "${{ secrets.RELEASE_TOKEN || github.token }}"
           retries: 3
           script: |
             /* jshint esversion: 11 */
@@ -192,14 +193,30 @@ jobs:
         uses: actions/github-script@v9
         if: "${{ steps.nightly-logic.outputs.UPDATE_TAG == 'true' }}"
         with:
+          github-token: "${{ secrets.RELEASE_TOKEN || github.token }}"
           retries: 3
           script: |
             /* jshint esversion: 11 */
+            // A tag moved with RELEASE_TOKEN triggers "Auto-release from tag"; its gate skips annotated tags marked [auto-nightly]
+            const responseTag = await github.rest.git.createTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag: 'nightly',
+              message: '[auto-nightly] Nightly build of ' + context.sha,
+              object: context.sha,
+              type: 'commit'
+            }).catch(responseTag => responseTag);
+            if(!(responseTag && responseTag.status === 201 && responseTag.data && responseTag.data.sha)) {
+              let errorMsg = 'createTag failed';
+              if(responseTag && responseTag.status && responseTag.message) errorMsg += ' with error ' + responseTag.status + ' (' + responseTag.message + ')';
+              throw new Error(errorMsg);
+            }
+            const tagSha = responseTag.data.sha;
             const response = await github.rest.git.updateRef({
               owner: context.repo.owner,
               repo: context.repo.repo,
               ref: 'tags/nightly',
-              sha: context.sha,
+              sha: tagSha,
               force: true
             }).catch(response => response);
             if(response && response.status === 200) {
@@ -209,7 +226,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 ref: 'refs/tags/nightly',
-                sha: context.sha
+                sha: tagSha
               }).catch(responseCreate => responseCreate);
               if(responseCreate && responseCreate.status === 201) {
                 console.log('Nightly tag created.');
@@ -227,6 +244,7 @@ jobs:
         uses: softprops/action-gh-release@v3
         if: "${{ steps.nightly-logic.outputs.UPDATE_RELEASE == 'true' }}"
         with:
+          token: "${{ secrets.RELEASE_TOKEN || github.token }}"
           name: "${{ steps.build.outputs.ZIP_VERSION }} nightly (${{ steps.build.outputs.ZIP_ARCH_COUNT }} builds)"
           tag_name: "nightly"
           target_commitish: "${{ github.sha }}"
