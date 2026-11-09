@@ -357,6 +357,65 @@ _mount_ext4_helper()
   return 0
 }
 
+# Print the filesystem type of the first matching mountpoint found in the recovery fstab.
+# Supports both the modern format (<src> <mnt_point> <type> ...) and the legacy one (<mnt_point> <type> <src> ...).
+_get_fs_type_from_fstab()
+{
+  local _fstab _mp _line _field1 _field2 _field3 _fs_type
+
+  for _fstab in '/etc/recovery.fstab' '/system/etc/recovery.fstab' '/etc/fstab'; do
+    test -r "${_fstab:?}" || continue
+
+    for _mp in "${@}"; do
+      _line="$(grep -v -e '^[[:blank:]]*#' -- "${_fstab:?}" | grep -m 1 -e "[[:blank:]]${_mp:?}[[:blank:]]" -e "^${_mp:?}[[:blank:]]" | tr -s -- '[:blank:]' ' ' | sed -e 's/^ //')" || continue
+      test -n "${_line?}" || continue
+
+      _field1="$(printf '%s\n' "${_line:?}" | cut -d ' ' -f '1')" || continue
+      _field2="$(printf '%s\n' "${_line:?}" | cut -d ' ' -f '2' -s)" || continue
+      _field3="$(printf '%s\n' "${_line:?}" | cut -d ' ' -f '3' -s)" || continue
+
+      if test "${_field2?}" = "${_mp:?}"; then
+        _fs_type="${_field3?}"
+      elif test "${_field1?}" = "${_mp:?}"; then
+        _fs_type="${_field2?}"
+      else
+        continue
+      fi
+
+      case "${_fs_type?}" in
+        'ext2' | 'ext3' | 'ext4' | 'erofs' | 'f2fs' | 'squashfs' | 'vfat')
+          printf '%s\n' "${_fs_type:?}"
+          return 0
+          ;;
+        *) ;;
+      esac
+    done
+  done
+
+  return 1
+}
+
+# Mount a block read-only, passing an explicit filesystem type first since some recoveries reject untyped mounts with EINVAL.
+# Usage: _mount_block_helper <preferred_fs_type_or_empty> <block> <mountpoint>
+_mount_block_helper()
+{
+  local _fs_type _tried
+
+  _tried=' '
+  for _fs_type in "${1-}" 'ext4' 'erofs' 'f2fs'; do
+    test -n "${_fs_type?}" || continue
+    case "${_tried:?}" in *" ${_fs_type:?} "*) continue ;; *) ;; esac
+    _tried="${_tried:?}${_fs_type:?} "
+
+    if _mount_helper 2> /dev/null -t "${_fs_type:?}" -o 'ro' "${2:?}" "${3:?}"; then
+      ui_debug "Mounted '${2?}' on '${3?}' as ${_fs_type?}"
+      return 0
+    fi
+  done
+
+  _mount_helper -o 'ro' "${2:?}" "${3:?}"
+}
+
 _losetup_helper()
 {
   if test -n "${DEVICE_LOSETUP-}" && PATH="${PREVIOUS_PATH:?}" "${DEVICE_LOSETUP:?}" "${@}"; then
@@ -808,7 +867,7 @@ unmount_apex_if_needed()
 
 _manual_partition_mount()
 {
-  local _backup_ifs _path _block _found
+  local _backup_ifs _path _block _found _fs_type
   unset LAST_MOUNTPOINT
   _backup_ifs="${IFS:-}"
   IFS="${NL:?}"
@@ -850,12 +909,20 @@ _manual_partition_mount()
   fi
 
   if test "${_found:?}" != 'false'; then
+    _fs_type=''
+    case "${3-}" in
+      '') ;;
+      'system') _fs_type="$(_get_fs_type_from_fstab '/system' '/' '/system_root' || :)" ;;
+      *) _fs_type="$(_get_fs_type_from_fstab "/${3:?}" || :)" ;;
+    esac
+    test -z "${_fs_type?}" || ui_debug "Filesystem type of ${3?} from fstab: ${_fs_type?}"
+
     for _path in ${2?}; do
       test -n "${_path?}" || continue
       if test "${RECOVERY_FAKE_SYSTEM:?}" = 'true' && test "${_path:?}" = '/system'; then continue; fi
       _prepare_mountpoint "${_path:?}" || continue
 
-      if _mount_helper -o 'ro' "${_block:?}" "${_path:?}"; then
+      if _mount_block_helper "${_fs_type?}" "${_block:?}" "${_path:?}"; then
         IFS="${_backup_ifs:-}"
         LAST_MOUNTPOINT="${_path:?}"
         return 0
@@ -986,7 +1053,7 @@ mount_partition_if_possible()
     fi
   done
 
-  if _manual_partition_mount "${_block_search_list:?}" "${_mp_list?}" && test -n "${LAST_MOUNTPOINT?}"; then
+  if _manual_partition_mount "${_block_search_list:?}" "${_mp_list?}" "${_partition_name:?}" && test -n "${LAST_MOUNTPOINT?}"; then
     LAST_PARTITION_MUST_BE_UNMOUNTED=1
     ui_debug "Mounted: ${LAST_MOUNTPOINT?}"
     return 0 # Successfully mounted
